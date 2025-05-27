@@ -1,0 +1,217 @@
+import heapq
+from collections import deque
+import time
+import csv
+import pandas as pd
+import tracemalloc  # <-- ADICIONADO
+
+# Heurística de Manhattan
+def manhattan(a, b):
+    return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+def is_valid(maze, pos):
+    x, y = pos
+    return 0 <= x < len(maze) and 0 <= y < len(maze[0]) and maze[x][y] == 0
+
+def reconstruct_path(came_from, current):
+    path = []
+    while current in came_from:
+        path.append(current)
+        current = came_from[current]
+    path.append(current)
+    path.reverse()
+    return path
+
+def bfs(maze, start, goal):
+    print("Rodando algoritmo: BFS")
+    queue = deque([start])
+    visited = {start}
+    came_from = {}
+    nodes_visited = 0
+
+    while queue:
+        current = queue.popleft()
+        nodes_visited += 1
+        if current == goal:
+            return reconstruct_path(came_from, current), nodes_visited
+        for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+            neighbor = (current[0]+dx, current[1]+dy)
+            if is_valid(maze, neighbor) and neighbor not in visited:
+                visited.add(neighbor)
+                came_from[neighbor] = current
+                queue.append(neighbor)
+    return None, nodes_visited
+
+def dfs(maze, start, goal):
+    print("Rodando algoritmo: DFS")
+    stack = [start]
+    visited = {start}
+    came_from = {}
+    nodes_visited = 0
+
+    while stack:
+        current = stack.pop()
+        nodes_visited += 1
+        if current == goal:
+            return reconstruct_path(came_from, current), nodes_visited
+        for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+            neighbor = (current[0]+dx, current[1]+dy)
+            if is_valid(maze, neighbor) and neighbor not in visited:
+                visited.add(neighbor)
+                came_from[neighbor] = current
+                stack.append(neighbor)
+    return None, nodes_visited
+
+def greedy(maze, start, goal):
+    print("Rodando algoritmo: Gulosa")
+    open_set = []
+    heapq.heappush(open_set, (manhattan(start, goal), start))
+    came_from = {}
+    visited = {start}
+    nodes_visited = 0
+
+    while open_set:
+        _, current = heapq.heappop(open_set)
+        nodes_visited += 1
+        if current == goal:
+            return reconstruct_path(came_from, current), nodes_visited
+        for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+            neighbor = (current[0]+dx, current[1]+dy)
+            if is_valid(maze, neighbor) and neighbor not in visited:
+                visited.add(neighbor)
+                came_from[neighbor] = current
+                heapq.heappush(open_set, (manhattan(neighbor, goal), neighbor))
+    return None, nodes_visited
+
+def astar(maze, start, goal):
+    print("Rodando algoritmo: A*")
+    open_set = []
+    heapq.heappush(open_set, (0, start))
+    came_from = {}
+    g_score = {start: 0}
+    nodes_visited = 0
+
+    while open_set:
+        _, current = heapq.heappop(open_set)
+        nodes_visited += 1
+        if current == goal:
+            return reconstruct_path(came_from, current), nodes_visited
+        for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+            neighbor = (current[0]+dx, current[1]+dy)
+            if is_valid(maze, neighbor):
+                tentative_g = g_score[current] + 1
+                if neighbor not in g_score or tentative_g < g_score[neighbor]:
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g
+                    f_score = tentative_g + manhattan(neighbor, goal)
+                    heapq.heappush(open_set, (f_score, neighbor))
+    return None, nodes_visited
+
+def run_all_algorithms(maze, start, goal, instance_name):
+    algorithms = {
+        "BFS": bfs,
+        "DFS": dfs,
+        "Gulosa": greedy,
+        "A*": astar
+    }
+
+    results = []
+    print(f"\nExecutando: {instance_name}")
+
+    for name, algo in algorithms.items():
+        tracemalloc.start()  # INÍCIO MONITORAMENTO MEMÓRIA
+        start_time = time.time()
+        path, visited = algo(maze, start, goal)
+        end_time = time.time()
+        current, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()  # FIM MONITORAMENTO
+
+        duration = (end_time - start_time) * 1000  # ms
+        cost = len(path) - 1 if path else -1
+
+        results.append({
+            "Instância": instance_name,
+            "Algoritmo": name,
+            "Tempo (ms)": round(duration, 2),
+            "Nós Visitados": visited,
+            "Custo do Caminho": cost,
+            "Memória Pico (KB)": round(peak / 1024, 2),
+            "Caminho Encontrado": path
+        })
+
+    return results
+
+def export_to_csv(results, filename="resultados_labirinto.csv"):
+    keys = results[0].keys()
+    with open(filename, "w", newline="", encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=keys)
+        writer.writeheader()
+        writer.writerows(results)
+    print(f"\nArquivo '{filename}' gerado com sucesso!")
+
+    df = pd.read_csv(filename, encoding='utf-8')
+    print("\nConteúdo do arquivo CSV gerado:")
+    print(df)
+
+def parse_maze_file(filepath):
+    with open(filepath, 'r', encoding='utf-8') as f:
+        lines = [line.rstrip('\n') for line in f.readlines()]
+
+    maze = []
+    start = None
+    goal = None
+
+    for i, line in enumerate(lines):
+        row = []
+        for j, char in enumerate(line):
+            if char == 'S':
+                start = (i, j)
+                row.append(0)
+            elif char == 'E':
+                goal = (i, j)
+                row.append(0)
+            elif char in (' ', '|', "'", '+'):
+                row.append(0)
+            else:
+                row.append(1)
+        maze.append(row)
+
+    return maze, start, goal
+
+def menu_maze_solver():
+    arquivos_labirinto = {
+        "1": ("maze1", "maze1.txt"),
+        "2": ("maze2", "maze2.txt"),
+        "3": ("maze3", "maze3.txt"),
+        "4": ("maze4", "maze4.txt"),
+        "5": ("maze5", "maze5.txt"),
+        "6": ("maze6", "maze6.txt"),
+    }
+
+    while True:
+        print("\n=== MENU: SELECIONE UMA INSTÂNCIA DE LABIRINTO ===")
+        for k, (nome, _) in arquivos_labirinto.items():
+            print(f"{k} - {nome}")
+        print("0 - Sair")
+
+        escolha = input("Digite o número da instância que deseja resolver: ").strip()
+
+        if escolha == "0":
+            print("Encerrando o programa.")
+            break
+
+        elif escolha in arquivos_labirinto:
+            nome, caminho = arquivos_labirinto[escolha]
+            caminho = f"./{caminho}"
+            try:
+                maze, start, goal = parse_maze_file(caminho)
+                print(f"Início: {start} | Fim: {goal}")
+                resultados = run_all_algorithms(maze, start, goal, nome)
+                export_to_csv(resultados)
+            except Exception as e:
+                print(f"Erro ao processar o labirinto: {e}")
+        else:
+            print("Opção inválida. Tente novamente.")
+
+if __name__ == "__main__":
+    menu_maze_solver()
