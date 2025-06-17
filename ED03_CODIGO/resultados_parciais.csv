@@ -1,4 +1,0 @@
-Arquivo,Crossover,Mutação,Inicialização,Distância,Tempo (s)
-tsp_8.csv,one_point,0.01,random,564.56,4.24
-tsp_8.csv,two_point,0.05,random,546.6,4.23
-tsp_8.csv,uniform,0.1,nearest,373.98,4.44
